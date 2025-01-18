@@ -1,28 +1,35 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from typing import List, Dict, Optional
 import requests
 from math import radians, sin, cos, sqrt, atan2
 from itertools import combinations
 import uuid
-import json
+import logging
+
+# Enable debugging logs
+logging.basicConfig(level=logging.DEBUG)
 
 app = FastAPI(
     title="Landmark Cluster API",
     description="API for finding clusters of landmarks in a given location",
     version="1.0.0"
 )
+
+# Origins allowed to access the API
 origins = [
-    "http://localhost:5173",
+      "*"  # Mobile frontend (your mobile device's IP)
 ]
 
+# Add CORS middleware to handle cross-origin requests
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=origins,  # Allow the frontend origin
     allow_credentials=True,
-    allow_methods=["GET", "POST"],
-    allow_headers=["*"],
+    allow_methods=["*"],  # Allow all HTTP methods
+    allow_headers=["*"],  # Allow all headers
     max_age=86400,  # Cache preflight requests for 24 hours
 )
 
@@ -31,6 +38,7 @@ class LocationRequest(BaseModel):
     location: str = Field(..., description="Location to search in")
     proximity_threshold: float = Field(1.0, description="Maximum distance between landmarks in kilometers")
 
+# Search for places using Olamaps API
 def search_places(landmark: str, location: str) -> List[Dict]:
     place = f"{landmark} in {location}"
     api_key = "IInXYC3x8Kqv3nRjk3YBMMl4MCykdsD6nAB8CUuG"  # Replace with your actual API key
@@ -59,6 +67,7 @@ def search_places(landmark: str, location: str) -> List[Dict]:
     except requests.exceptions.RequestException as e:
         raise HTTPException(status_code=503, detail=f"Error accessing places API: {str(e)}")
 
+# Haversine formula to calculate distance between two points
 def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     try:
         R = 6371  # Earth's radius in kilometers
@@ -82,6 +91,7 @@ def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
             detail=f"Error calculating distance: {str(e)}"
         )
 
+# Check if landmarks are within proximity threshold
 def check_cluster_validity(places: List[Dict], proximity_threshold: float) -> tuple:
     if len(places) < 2:
         return False, []
@@ -94,6 +104,7 @@ def check_cluster_validity(places: List[Dict], proximity_threshold: float) -> tu
         distances.append(dist)
     return True, distances
 
+# Calculate the midpoint of the landmarks
 def calculate_midpoint(places: List[Dict]) -> tuple:
     if not places:
         return 0, 0
@@ -106,17 +117,18 @@ def calculate_midpoint(places: List[Dict]) -> tuple:
     
     return midpoint_lat, midpoint_lng
 
+# Generate cluster IDs
 def generate_cluster_id(index: int) -> str:
     return index+1
 
+# Handle CORS preflight request explicitly for debugging
+@app.options("/api/v1/clusters")
+async def options_handler():
+    return JSONResponse(content={}, status_code=200)
+
+# Main route to find clusters of landmarks
 @app.post("/api/v1/clusters")
 async def find_clusters(request: LocationRequest):
-    """
-    Find clusters of landmarks within a specified proximity threshold in a given location.
-    
-    Returns a JSON object containing clusters of landmarks that are within the specified
-    proximity threshold of each other.
-    """
     try:
         results = {landmark: search_places(landmark, request.location) 
                   for landmark in request.landmarks}
