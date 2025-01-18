@@ -50,7 +50,7 @@ const LandmarkClusters = () => {
 
       console.log('Sending request:', requestData);
 
-      const response = await fetch('http://192.168.1.86:8000/api/v1/clusters', {
+      const response = await fetch('https://server-shiva-manus-projects.vercel.app/api/v1/clusters', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
